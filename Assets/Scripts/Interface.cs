@@ -6,7 +6,7 @@ using UnityEngine.UI;
 public class Interface : MonoBehaviour
 {
     public InputField speed_field;
-    public Text time_elapsed, generation_num, creatures_alive, average_fitness;
+    public Text time_elapsed, generation_num, creatures_alive, average_fitness, fps_counter;
     private TimeSpan span;
     public static Interface Instance { get; private set; }
 
@@ -30,8 +30,9 @@ public class Interface : MonoBehaviour
         StartCoroutine(CountTime());
     }
 
-    public void FixedUpdate()
+    public void Update()
     {
+        fps_counter.text = (Mathf.RoundToInt(1.0f / Time.smoothDeltaTime)).ToString();
         time_elapsed.text = span.ToString();
         generation_num.text = GeneticAlgorithm.Instance.generation_number.ToString();
         creatures_alive.text = GeneticAlgorithm.Instance.alive_creatures.Count.ToString();

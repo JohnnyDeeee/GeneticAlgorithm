@@ -4,7 +4,7 @@ using UnityEngine;
 public class Creature : MonoBehaviour
 {
     public int health;
-    public int max_capacity;
+    public int max_capacity, current_capacity = 0;
     public float digest_time;
     public int eyesight;
     public int baby_amount;
@@ -15,6 +15,7 @@ public class Creature : MonoBehaviour
     [HideInInspector] public object[] dna;
     private bool isTicking = false;
 
+    // Apply dna to creature
     public void SetProperties(object[] dna)
     {
         this.health = 100;
@@ -24,31 +25,28 @@ public class Creature : MonoBehaviour
         this.baby_amount = (int)dna[3];
         this.speed = (float)dna[4];
 
-        Vector2 direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
+        Vector2 direction = new Vector2(Random.Range(-1f, 1.01f), Random.Range(-1f, 1.01f));
         // Make sure direction is not (0,0)
         while (direction.x == 0 && direction.y == 0)
-            direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
+            direction = new Vector2(Random.Range(-1f, 1.01f), Random.Range(-1f, 1.01f));
         this.direction = direction;
 
         this.dna = dna;
-        this.mutation_rate = 1.0f; //Random.Range(0.005f, 0.01f);
+        this.mutation_rate = Random.Range(0.005f, 0.01f);
     }
 
-    // Main loop for creature
-    public void FixedUpdate()
+    // Main loop
+    public void Update()
     {
         if (isAlive)
         {
-            // Activate losing health coroutine
+            // Start coroutines
             if (!isTicking)
             {
                 StartCoroutine(LoseHealth());
+                StartCoroutine(DigestFood());
                 isTicking = true;
             }
-
-            // Move around
-            GetComponent<Rigidbody2D>().velocity = direction;
-            GetComponent<Rigidbody2D>().velocity = speed * (GetComponent<Rigidbody2D>().velocity.normalized);
 
             // Die
             if (health <= 0)
@@ -59,14 +57,36 @@ public class Creature : MonoBehaviour
         }
     }
 
+    // Main physics loop
+    public void FixedUpdate()
+    {
+        if (isAlive)
+        {
+            // Move around
+            GetComponent<Rigidbody2D>().velocity = direction;
+            GetComponent<Rigidbody2D>().velocity = speed * (GetComponent<Rigidbody2D>().velocity.normalized);
+        }
+    }
+
+    // Handle collision with triggers
     public void OnTriggerEnter2D(Collider2D coll)
     {
         if (coll.gameObject.tag == "food")
         {
-            Vector2 temp_direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
-            while (temp_direction.x == 0 && temp_direction.y == 0)
-                temp_direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
-            direction = temp_direction;
+            if (current_capacity < max_capacity)
+            {
+                // Move to random direction
+                Vector2 temp_direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
+                while (temp_direction.x == 0 && temp_direction.y == 0)
+                    temp_direction = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f));
+                direction = temp_direction;
+
+                // Add food to capacity
+                current_capacity++;
+
+                // Make food respawn
+                StartCoroutine(coll.gameObject.GetComponent<Food>().Respawn());
+            }            
         }
         if (coll.gameObject.tag == "border")
         {
@@ -105,8 +125,21 @@ public class Creature : MonoBehaviour
     {
         while (isAlive)
         {
-            yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(1.0f / this.speed);
             health--;
+        }
+    }
+
+    // Converts food into health
+    private IEnumerator DigestFood()
+    {
+        while (isAlive)
+        {
+            yield return new WaitUntil(() => current_capacity > 0);
+            yield return new WaitForSeconds(digest_time);
+            current_capacity--;
+            health++;
+
         }
     }
 }

@@ -9,17 +9,10 @@ public class Food : MonoBehaviour
             col.gameObject.tag == "spawn")
         {
             GeneticAlgorithm.Instance.ChangeFoodPosition(gameObject);
-        }
-
-        if (col.gameObject.tag == "creature")
-        {
-            Creature creature = col.GetComponent<Creature>();
-            creature.health += 1;
-            StartCoroutine(Respawn());
-        }
+        }        
     }
 
-    private IEnumerator Respawn()
+    public IEnumerator Respawn()
     {
         GetComponent<BoxCollider2D>().enabled = false;
         GetComponent<SpriteRenderer>().enabled = false;

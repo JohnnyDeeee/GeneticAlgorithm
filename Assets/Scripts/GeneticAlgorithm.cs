@@ -5,9 +5,9 @@ using UnityEngine;
 
 public class GeneticAlgorithm : MonoBehaviour {
 
-    private int amount_food = 400;
-    private int population_size = 200;
-    private GameObject world, spawn;
+    private int amount_food = 600;
+    private int population_size = 500;
+    private GameObject world, spawn, creature_prefab, food_prefab;
     public int generation_number = 0;
     public int average_fitness = 0;
     public List<Creature> alive_creatures;
@@ -28,8 +28,16 @@ public class GeneticAlgorithm : MonoBehaviour {
     }
 
     // Initialize world
-	void Start () {
-        GenerateWorld(amount_food);
+	void Start ()
+    {
+        Profiler.maxNumberOfSamplesPerFrame = 10000; //DEBUG
+
+        food_prefab = Resources.Load<GameObject>("Prefabs/Food");
+        creature_prefab = Resources.Load<GameObject>("Prefabs/Creature");
+
+        GenerateWorld(amount_food);        
+        InitializePopulation();
+
         StartCoroutine(StartGeneticAlgorithm());
 	}
 
@@ -46,7 +54,7 @@ public class GeneticAlgorithm : MonoBehaviour {
         for (int i = 0; i < amount_food; i++)
         {
             // Create gameobject and set parent to world
-            GameObject food_object = Instantiate(Resources.Load<GameObject>("Prefabs/Food"));
+            GameObject food_object = Instantiate(food_prefab);
             food_object.name = "Food";
             food_object.transform.SetParent(world.transform, false);
             ChangeFoodPosition(food_object);            
@@ -55,15 +63,16 @@ public class GeneticAlgorithm : MonoBehaviour {
         spawn = GameObject.FindGameObjectWithTag("spawn");
     }
 
-    // Start the main loop for the algorithm
-    private IEnumerator StartGeneticAlgorithm()
+    // Create the first population
+    private void InitializePopulation()
     {
         alive_creatures = new List<Creature>();
 
-        // Initialize population
+        // Initialize first population
         for (int i = 0; i < population_size; i++)
         {
-            object[] dna = new object[5] { Random.Range(3, 5), Random.Range(4f, 6f), 0, Random.Range(1, 3), Random.Range(0.1f, 2.0f) };
+            // dna { max_capacity, digest_time, eyesight, baby_amount, speed }
+            object[] dna = new object[5] { Random.Range(3, 6), Random.Range(4f, 6f), 0, Random.Range(1, 4), Random.Range(0.1f, 0.9f) };
             CreateCreature(dna, "Creature " + i);
         }
 
@@ -72,47 +81,56 @@ public class GeneticAlgorithm : MonoBehaviour {
         Interface.Instance.Start();
         foreach (Creature creature in alive_creatures)
             creature.isAlive = true;
+    }
 
+    // Start the main loop for the algorithm
+    private IEnumerator StartGeneticAlgorithm()
+    {
         // Main loop
         while (true)
         {
             yield return new WaitForSeconds(120.0f);
 
-            // Freeze the survivors
+            /* CALCULATE FITNESS */
+            // Fitness value is health (higher health = better fitness)            
             int total_health = 0;
             foreach (Creature creature in alive_creatures)
             {
+                // Freeze the survivors
                 creature.isAlive = false;
                 creature.GetComponent<Rigidbody2D>().isKinematic = true;
                 creature.GetComponent<Rigidbody2D>().velocity = Vector2.zero;
+
                 total_health += creature.health;
             }
             average_fitness = total_health / alive_creatures.Count;
 
-            /* CALCULATE FITNESS */
-            // fitness = health (higher health = better fitness)
-            List<Creature> ordered_pool = alive_creatures.OrderByDescending(x => x.health).ToList();
-
             /* SELECTION */
-            // Get the fittest (if possible)
+            // Get the fittest X% (if possible)
+            float percentage = 0.80f;
+            List<Creature> ordered_pool = alive_creatures.OrderByDescending(x => x.health).ToList();
             List<Creature> mating_pool = new List<Creature>();
             try
             {
-                for (int i = 0; i < ordered_pool.Count/2; i++) // get half of the list
+                for (int i = 0; i < Mathf.RoundToInt(ordered_pool.Count * percentage); i++) // get half of the list
                     mating_pool.Add(ordered_pool[i]);
             }
             catch (System.IndexOutOfRangeException)
             { }
 
+            // Delete this generation
             foreach (Creature creature in alive_creatures)
                 Destroy(creature.gameObject);
-            alive_creatures.Clear(); // Clear the list for the next generation
+            alive_creatures.Clear();
 
             /* REPRODUCTION */
             List<int> indexes_mated = new List<int>();
-            int babies_created = 0; //TEMP
-            for (int i = 0; i < mating_pool.ToArray().Length; i+=2)
+            int babies_created = 0;
+            for (int i = 0; i < mating_pool.ToArray().Length; i++)
             {
+                if (indexes_mated.Contains(i)) // Skip this mate if it already has mated
+                    continue;
+
                 indexes_mated.Add(i); // Add current index to list
 
                 // Find a new "free" index for a mate
@@ -132,7 +150,7 @@ public class GeneticAlgorithm : MonoBehaviour {
                 Creature partner_2 = mating_pool[random_index];
 
                 // Decide how many babies will be created
-                int parent_number = Random.Range(1, 2);
+                int parent_number = Random.Range(1, 3);
                 int num_babies = 2;
                 switch (parent_number)
                 {
@@ -144,6 +162,7 @@ public class GeneticAlgorithm : MonoBehaviour {
                         break;
                 }
 
+                // Create new DNA
                 for (int baby = 1; baby <= num_babies; baby++)
                 {
                     // Crossover
@@ -163,23 +182,6 @@ public class GeneticAlgorithm : MonoBehaviour {
                     if (rand <= partner_1.mutation_rate ||
                         rand <= partner_2.mutation_rate)
                     {
-                        // Pick one dna element to mutate
-                        //int index = Random.Range(0, new_dna.Length - 1);
-                        //object element = new_dna[index];
-                        //float multiplier = Random.Range(0.1f, 0.7f);
-                        //if (element is int)
-                        //{
-                        //    int element_int = int.Parse(element.ToString());
-                        //    element_int += Mathf.RoundToInt(element_int * multiplier);
-                        //    new_dna[index] = element_int;
-                        //}
-                        //else if (element is float)
-                        //{
-                        //    float element_float = float.Parse(element.ToString());
-                        //    element_float += Mathf.Round(element_float * multiplier);
-                        //    new_dna[index] = element_float;
-                        //}
-
                         // Give all dna elements a chance to mutate
                         int max_capacity = int.Parse(new_dna[0].ToString());
                         float digest_time = float.Parse(new_dna[1].ToString());
@@ -233,7 +235,7 @@ public class GeneticAlgorithm : MonoBehaviour {
             // Activate the creatures
             generation_number++;
             foreach (Creature creature in alive_creatures)
-                creature.isAlive = true;
+                creature.isAlive = true;                
         }
     }
 
@@ -241,7 +243,7 @@ public class GeneticAlgorithm : MonoBehaviour {
     private void CreateCreature(object[] dna, string name)
     {
         // Create creature gameobject
-        GameObject creature_object = Instantiate(Resources.Load<GameObject>("Prefabs/Creature"));
+        GameObject creature_object = Instantiate(creature_prefab);
         creature_object.name = name;
         creature_object.transform.SetParent(world.transform, false);
         creature_object.GetComponent<Creature>().SetProperties(dna);
@@ -260,8 +262,8 @@ public class GeneticAlgorithm : MonoBehaviour {
         float max_y = max_range.y;
             
         // Find a random possible position for food_object
-        Vector3 possible_position = new Vector3(Random.Range(min_x, max_x), Random.Range(min_y, max_y), gameObject.transform.parent.position.z);
-        gameObject.transform.position = possible_position;
+        Vector3 possible_position = new Vector3(Random.Range(min_x, max_x), Random.Range(min_y, max_y), gameObject.transform.parent.position.z-1);
+        gameObject.transform.localPosition = possible_position;
     }
 
     // Change position of food object
@@ -270,10 +272,10 @@ public class GeneticAlgorithm : MonoBehaviour {
         float world_width = world.GetComponent<SpriteRenderer>().sprite.rect.size.x;
         float world_height = world.GetComponent<SpriteRenderer>().sprite.rect.size.y;
 
-        float min_x = (world_width / 2 * -1) * world.transform.localScale.x; // + ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.x * food_object.transform.lossyScale.x) / 2);
-        float max_x = world_width / 2 * world.transform.localScale.x;// - ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.x * food_object.transform.lossyScale.x) / 2);
-        float min_y = (world_height / 2 * -1) * world.transform.localScale.y;// + ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.y * food_object.transform.lossyScale.y) / 2);
-        float max_y = world_height / 2 * world.transform.localScale.y;// - ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.y * food_object.transform.lossyScale.y) / 2);
+        float min_x = (world_width / 2 * -1) + ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.x * food_object.transform.lossyScale.x) / 2);
+        float max_x = world_width / 2 - ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.x * food_object.transform.lossyScale.x) / 2);
+        float min_y = (world_height / 2 * -1) + ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.y * food_object.transform.lossyScale.y) / 2);
+        float max_y = world_height / 2 - ((food_object.GetComponent<SpriteRenderer>().sprite.rect.size.y * food_object.transform.lossyScale.y) / 2);
         Vector2 min_range = new Vector2(min_x, min_y);
         Vector2 max_range = new Vector2(max_x, max_y);
 
