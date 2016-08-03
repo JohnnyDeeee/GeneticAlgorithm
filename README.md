@@ -2,7 +2,7 @@
 
 NOTES:
 - Crossover rate is 100% (1-point crossover)
-- Population shrinks over time
+- Population shrinks over time (remove baby_amount from DNA and always create population of initial size?)
 - Time elapsed is not 1 seconds accurate
 - Create object-pool to improve performance with high value populations
 
